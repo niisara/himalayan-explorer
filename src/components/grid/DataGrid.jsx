@@ -325,7 +325,7 @@ export default function DataGrid({
     <div className="flex flex-col flex-1 min-h-0">
       {/* ── Table area ──────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-auto min-h-0">
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden relative">
+        <div className="bg-white rounded-xl border border-gray-200 relative" style={{ overflowX: 'visible' }}>
           {/* Loading overlay */}
           {loading && (
             <div className="absolute inset-0 bg-white/70 z-30 flex items-center justify-center">
@@ -374,7 +374,7 @@ export default function DataGrid({
                 {renderActions && (
                   <th
                     ref={cogContainerRef}
-                    className="w-[112px] px-3 py-2.5 relative bg-gray-50 border-l border-gray-200"
+                    className="w-[112px] px-3 py-2.5 relative bg-gray-50 border-l border-gray-200 sticky right-0 z-20"
                     onMouseEnter={() => setActionHeaderHovered(true)}
                     onMouseLeave={() => { if (!cogOpen) setActionHeaderHovered(false); }}
                   >
@@ -839,9 +839,12 @@ function DataRow({
         );
       })}
 
-      {/* Action column */}
+      {/* Action column — sticky right */}
       {renderActions && (
-        <td className="px-2 py-2 border-l border-gray-100">
+        <td
+          className="px-2 py-2 border-l border-gray-100 sticky right-0 z-10"
+          style={{ backgroundColor: rowBg }}
+        >
           {renderActions(row)}
         </td>
       )}
