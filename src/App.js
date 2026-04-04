@@ -39,6 +39,7 @@ const COLUMNS = [
   { key: 'rent',   label: 'Rent/mo',     filterType: 'search', minW: 'min-w-[90px]'  },
   { key: 'fiber',  label: 'Fiber',       filterType: 'select', minW: 'min-w-[80px]',  filterOptions: ['Yes','No'] },
   { key: 'net',    label: 'Network',     filterType: 'search', minW: 'min-w-[180px]', maxW: 'max-w-[200px]', truncate: true },
+  { key: 'bugyal', label: 'Bugyal',       filterType: 'search', minW: 'min-w-[80px]'  },
   { key: 'crowd',  label: 'Crowd',       filterType: 'search', minW: 'min-w-[75px]'  },
   { key: 'desc',   label: 'Description', filterType: 'search', minW: 'min-w-[300px]', maxW: 'max-w-[320px]', truncate: true },
 ];
@@ -128,6 +129,10 @@ function TownCard({ town, isFavorited, note, onHeart, onNote }) {
           <div className="flex items-center justify-between gap-2">
             <span className="text-gray-500">Crowd</span>
             <Stars value={town.crowd} color="text-red-400" />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-gray-500">Bugyal</span>
+            <Stars value={town.bugyal} color="text-emerald-400" />
           </div>
         </div>
 
