@@ -179,6 +179,7 @@ export default function App() {
   const [page,        setPage]        = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [groupBy,     setGroupBy]     = useState('');
+  const [sorts,       setSorts]       = useState([]);   // [{ key, dir:'asc'|'desc' }, …]
   const [noteModal,   setNoteModal]   = useState(null); // { town, currentNote }
 
   const { ready: dbReady, favorites, notes, toggleFavorite, saveNote } = useDatabase();
@@ -199,8 +200,27 @@ export default function App() {
     }),
   [tableData, filters]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
-  const pageData   = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+  // Multi-column sorting
+  const sorted = useMemo(() => {
+    if (sorts.length === 0) return filtered;
+    return [...filtered].sort((a, b) => {
+      for (const { key, dir } of sorts) {
+        const av = a[key] ?? '';
+        const bv = b[key] ?? '';
+        let cmp = 0;
+        if (typeof av === 'number' && typeof bv === 'number') {
+          cmp = av - bv;
+        } else {
+          cmp = String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
+        }
+        if (cmp !== 0) return dir === 'asc' ? cmp : -cmp;
+      }
+      return 0;
+    });
+  }, [filtered, sorts]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / rowsPerPage));
+  const pageData   = sorted.slice((page - 1) * rowsPerPage, page * rowsPerPage);
 
   // Card filtering
   const cardFiltered = useMemo(() =>
@@ -260,7 +280,7 @@ export default function App() {
   const topCount = cardFiltered.filter(t => t.top === 1).length;
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="h-screen bg-gray-100 flex flex-col overflow-hidden">
       {/* ── Top bar ────────────────────────────────────────────────────── */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between gap-4 shrink-0">
         <div>
@@ -364,6 +384,8 @@ export default function App() {
               allChecked={allChecked}
               filters={filters}
               onFiltersChange={handleFiltersChange}
+              sorts={sorts}
+              onSortsChange={s => { setSorts(s); setPage(1); }}
               page={page}
               totalPages={totalPages}
               rowsPerPage={rowsPerPage}

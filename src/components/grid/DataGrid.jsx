@@ -79,6 +79,7 @@ import { createPortal } from 'react-dom';
 import {
   Search, Calendar, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   Check, Settings2, Eye, EyeOff, GripVertical, Pin, X,
+  ArrowUpDown, ArrowUp, ArrowDown,
 } from 'lucide-react';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -137,6 +138,10 @@ export default function DataGrid({
   // Column filters
   filters = {},
   onFiltersChange,
+
+  // Sorting (multi-column)
+  sorts = [],
+  onSortsChange,
 
   // Pagination
   page = 1,
@@ -241,6 +246,46 @@ export default function DataGrid({
     onFiltersChange?.({ ...filters, [key]: value });
   }
 
+  // ── Sort helpers ────────────────────────────────────────────────────
+  /** Click column header to cycle sort: none → asc → desc → none.
+   *  Hold Shift to add/modify without replacing existing sorts. */
+  function handleSortClick(key, e) {
+    const multi = e.shiftKey;
+    const existing = sorts.find(s => s.key === key);
+    let next;
+    if (existing) {
+      if (existing.dir === 'asc') {
+        // asc → desc
+        next = sorts.map(s => s.key === key ? { ...s, dir: 'desc' } : s);
+      } else {
+        // desc → remove
+        next = sorts.filter(s => s.key !== key);
+      }
+    } else {
+      // add ascending
+      if (multi) {
+        next = [...sorts, { key, dir: 'asc' }];
+      } else {
+        next = [{ key, dir: 'asc' }];
+      }
+    }
+    // If not multi-sort click, keep only this column's sort
+    if (!multi && existing) {
+      if (existing.dir === 'asc') {
+        next = [{ key, dir: 'desc' }];
+      } else {
+        next = [];
+      }
+    }
+    onSortsChange?.(next);
+  }
+
+  function getSortInfo(key) {
+    const idx = sorts.findIndex(s => s.key === key);
+    if (idx === -1) return null;
+    return { dir: sorts[idx].dir, rank: sorts.length > 1 ? idx + 1 : null };
+  }
+
   // ── Sticky column helpers ───────────────────────────────────────────────
   /** Returns inline style object for a visible column at visIdx. */
   function getStickyStyle(visIdx) {
@@ -324,11 +369,10 @@ export default function DataGrid({
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* ── Table area ──────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto min-h-0">
-        <div className="bg-white rounded-xl border border-gray-200 relative" style={{ overflowX: 'visible' }}>
+      <div className="flex-1 overflow-auto min-h-0 bg-white rounded-xl border border-gray-200 relative">
           {/* Loading overlay */}
           {loading && (
-            <div className="absolute inset-0 bg-white/70 z-30 flex items-center justify-center">
+            <div className="absolute inset-0 bg-white/70 z-50 flex items-center justify-center">
               <div className="flex gap-1.5">
                 {[0, 1, 2].map(i => (
                   <div
@@ -341,18 +385,19 @@ export default function DataGrid({
             </div>
           )}
 
-          <table className="w-full text-[12px] border-collapse">
+          <table className="w-full text-[12px] border-separate border-spacing-0">
             {/* ── Header ─────────────────────────────────────────────── */}
-            <thead>
+            <thead className="sticky top-0 z-30">
               <tr className="border-b border-gray-200 bg-gray-50">
                 {/* Checkbox — always sticky at left:0 */}
-                <th className="w-10 px-3 py-2.5 bg-gray-50 sticky left-0 z-20">
+                <th className="w-10 px-3 py-2.5 bg-gray-50 sticky left-0 z-40">
                   <Checkbox checked={allChecked} onChange={onSelectAll} />
                 </th>
 
                 {visibleCols.map((col, visIdx) => {
                   const stickyStyle = getStickyStyle(visIdx);
                   const isSticky    = isPinned(visIdx);
+                  const sortInfo    = getSortInfo(col.key);
                   return (
                     <FilterTh
                       key={col.key}
@@ -366,6 +411,8 @@ export default function DataGrid({
                       minW={col.minW}
                       style={Object.keys(stickyStyle).length ? stickyStyle : undefined}
                       extraClass={isSticky ? 'bg-gray-100 shadow-[1px_0_0_0_#e5e7eb]' : 'bg-gray-50'}
+                      sortInfo={sortInfo}
+                      onSortClick={e => handleSortClick(col.key, e)}
                     />
                   );
                 })}
@@ -374,7 +421,7 @@ export default function DataGrid({
                 {renderActions && (
                   <th
                     ref={cogContainerRef}
-                    className="w-[112px] px-3 py-2.5 relative bg-gray-50 border-l border-gray-200 sticky right-0 z-20"
+                    className="w-[112px] px-3 py-2.5 relative bg-gray-50 border-l border-gray-200 sticky right-0 z-40"
                     onMouseEnter={() => setActionHeaderHovered(true)}
                     onMouseLeave={() => { if (!cogOpen) setActionHeaderHovered(false); }}
                   >
@@ -444,7 +491,6 @@ export default function DataGrid({
               )}
             </tbody>
           </table>
-        </div>
       </div>
 
       {/* ── Column manager panel (portal — escapes overflow:hidden) ────── */}
@@ -474,6 +520,35 @@ export default function DataGrid({
           />
         </div>,
         document.body
+      )}
+
+      {/* ── Active sorts bar ────────────────────────────────────────────── */}
+      {sorts.length > 0 && (
+        <div className="flex items-center gap-2 px-4 py-1.5 bg-violet-50/60 border border-violet-100 rounded-xl mt-2">
+          <span className="text-[10px] font-semibold text-violet-500 uppercase tracking-wide shrink-0">Sorted by</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {sorts.map((s, i) => (
+              <span key={s.key} className="inline-flex items-center gap-1 bg-white border border-violet-200 rounded-full px-2 py-0.5 text-[11px] text-violet-700 font-medium">
+                {colMap[s.key]?.label ?? s.key}
+                {s.dir === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
+                <button
+                  onClick={() => onSortsChange?.(sorts.filter((_, j) => j !== i))}
+                  className="ml-0.5 text-violet-400 hover:text-violet-700 transition-colors"
+                  title="Remove this sort"
+                >
+                  <X size={9} />
+                </button>
+              </span>
+            ))}
+            <button
+              onClick={() => onSortsChange?.([])}
+              className="text-[10px] text-violet-500 hover:text-violet-700 font-medium ml-1"
+            >
+              Clear all
+            </button>
+          </div>
+          <span className="text-[10px] text-violet-400 ml-auto shrink-0">Shift+click to multi-sort</span>
+        </div>
       )}
 
       {/* ── Pagination bar ──────────────────────────────────────────────── */}
@@ -710,16 +785,37 @@ function Checkbox({ checked, onChange }) {
  * Uses forwardRef so the parent can measure offsetWidth for sticky calculations.
  */
 const FilterTh = forwardRef(function FilterTh(
-  { label, filterKey, filterType, filterOptions, filters, setFilter, minW, style, extraClass = '' },
+  { label, filterKey, filterType, filterOptions, filters, setFilter, minW, style, extraClass = '', sortInfo, onSortClick },
   ref
 ) {
   const value     = filters[filterKey] ?? '';
   const baseClass = `px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap border-l border-gray-200 ${minW ?? ''} ${extraClass}`;
 
+  // Sort indicator element
+  const SortIndicator = () => (
+    <button
+      onClick={onSortClick}
+      title={sortInfo ? (sortInfo.dir === 'asc' ? 'Sorted ascending — click to reverse, Shift+click for multi-sort' : 'Sorted descending — click to remove') : 'Click to sort, Shift+click to add sort'}
+      className={`inline-flex items-center gap-0.5 ml-1 shrink-0 rounded px-0.5 py-0.5 transition-colors ${
+        sortInfo ? 'text-[#7c3aed] hover:bg-violet-100' : 'text-gray-300 hover:text-gray-500 hover:bg-gray-100'
+      }`}
+    >
+      {sortInfo?.dir === 'asc'  && <ArrowUp size={11} strokeWidth={2.5} />}
+      {sortInfo?.dir === 'desc' && <ArrowDown size={11} strokeWidth={2.5} />}
+      {!sortInfo                && <ArrowUpDown size={11} />}
+      {sortInfo?.rank != null && (
+        <span className="text-[9px] font-bold text-[#7c3aed] -ml-0.5">{sortInfo.rank}</span>
+      )}
+    </button>
+  );
+
   if (filterType === 'select') {
     return (
       <th ref={ref} className={baseClass} style={style}>
-        <div className="mb-1.5 text-[11px] uppercase tracking-wide text-gray-500">{label}</div>
+        <div className="mb-1.5 text-[11px] uppercase tracking-wide text-gray-500 flex items-center">
+          <span>{label}</span>
+          <SortIndicator />
+        </div>
         <div className="flex items-center gap-1 border border-gray-200 rounded-md h-7 px-2 bg-white font-normal">
           <select
             value={value}
@@ -738,7 +834,10 @@ const FilterTh = forwardRef(function FilterTh(
   if (filterType === 'date') {
     return (
       <th ref={ref} className={baseClass} style={style}>
-        <div className="mb-1.5 text-[11px] uppercase tracking-wide text-gray-500">{label}</div>
+        <div className="mb-1.5 text-[11px] uppercase tracking-wide text-gray-500 flex items-center">
+          <span>{label}</span>
+          <SortIndicator />
+        </div>
         <div className="flex items-center gap-1 border border-gray-200 rounded-md h-7 px-2 bg-white font-normal">
           <input
             type="text"
@@ -756,7 +855,10 @@ const FilterTh = forwardRef(function FilterTh(
   // Default: search
   return (
     <th ref={ref} className={baseClass} style={style}>
-      <div className="mb-1.5 text-[11px] uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="mb-1.5 text-[11px] uppercase tracking-wide text-gray-500 flex items-center">
+        <span>{label}</span>
+        <SortIndicator />
+      </div>
       <div className="flex items-center gap-1 border border-gray-200 rounded-md h-7 px-2 bg-white font-normal">
         <Search size={11} className="text-gray-400 shrink-0" />
         <input
